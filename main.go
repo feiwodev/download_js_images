@@ -22,7 +22,7 @@ import (
 //  下载简书markdown 文档中的图片
 // ----------------------------------------------------------
 
-const rootPath = `C:\Users\feiwo\Desktop\ndk\docs`
+const rootPath = `/Users/feiwo/Desktop/ndk/docs`
 
 func main() {
 	_ = filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
@@ -33,20 +33,34 @@ func main() {
 			return err
 		}else {
 			compile := regexp.MustCompile(`!\[(.+)]\((http://upload-images.jianshu.io/upload_images/.+)\)`)
-			allString := compile.FindAllSubmatch(bytes, -1)
-			if len(allString)  == 0{
+			allImageUrl := compile.FindAllSubmatch(bytes, -1)
+			if len(allImageUrl)  == 0{
 				return nil
 			}
-			dirPath := fmt.Sprintf("imgs/%s", info.Name())
-			if err := os.Mkdir(dirPath,os.ModeDir); err != nil{
+			dirPath := fmt.Sprintf("images/%s", strings.ReplaceAll(info.Name(),".md",""))
+			if err := os.Mkdir(dirPath,0777); err != nil{
 				return nil
 			}
-			for _, v := range allString {
+			fileContent := string(bytes)
+			for _, originImageUrl := range allImageUrl {
+				index := strings.Index(fileContent, string(originImageUrl[2]))
+				endIndex := index + len(originImageUrl[2])
+				sub := fileContent[index:endIndex]
+				fileName := strings.Replace(fmt.Sprintf("%s",originImageUrl[1])," ","_",-1)
+				fp := fmt.Sprintf("../assets/%s/%s.webp",dirPath,fileName)
+				fileContent = strings.Replace(fileContent,sub, fp, endIndex)
+			}
+			for _, v := range allImageUrl {
 				fileName := strings.Replace(fmt.Sprintf("%s",v[1])," ","_",-1)
 				fp := fmt.Sprintf("%s/%s.webp",dirPath,fileName)
 				fmt.Println(fmt.Sprintf("download....%s, url = %s",dirPath,fmt.Sprintf("%s/format/webp",v[2])))
 				download(fp,fmt.Sprintf("%s/format/webp",v[2]))
 			}
+			err := ioutil.WriteFile(path, []byte(fileContent), 0666)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Println("写入文件成功....")
 		}
 		return nil
 	})
@@ -64,10 +78,13 @@ func download(fp string, url string) {
 	}
 	defer response.Body.Close()
 
+
 	file, e := os.Create(fp)
+
 	if e != nil {
 		log.Println(e)
 	}
+
 	defer file.Close()
 	_, e = io.Copy(file, response.Body)
 	if e != nil {
